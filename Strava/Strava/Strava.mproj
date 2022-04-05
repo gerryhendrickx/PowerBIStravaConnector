@@ -72,6 +72,9 @@
     <Compile Include="client_secret">
       <SubType>Content</SubType>
     </Compile>
+    <Content Include="club_id">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="README.md">
       <SubType>Content</SubType>
     </Content>

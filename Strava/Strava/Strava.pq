@@ -8,6 +8,7 @@
 
 client_id = Text.FromBinary(Extension.Contents("client_id"));
 client_secret = Text.FromBinary(Extension.Contents("client_secret"));
+club_id = Text.FromBinary(Extension.Contents("club_id"));
 redirect_uri = "https://oauth.powerbi.com/views/oauthredirect.html";
 
 // strava base URL
