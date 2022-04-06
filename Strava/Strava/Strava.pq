@@ -1,4 +1,4 @@
-﻿section Strava;
+section Strava;
 
 //
 // Make sure you have two files called client_id and client_secret in the root of your solution.
@@ -16,6 +16,8 @@ api_uri = "https://www.strava.com/api/v3/";
 
 activity_uri = "athlete/activities";
 athlete_uri = "athlete";
+club_uri = "clubs/"  & club_id;
+club_activity_uri = "clubs/"  & club_id & "/activities";
 
 // default page size, using the MAX page size to limit the amount of calls to the API
 page_size = 200;
@@ -75,7 +77,9 @@ StravaData.NavTable = () as table =>
     let
         source = #table({"Name", "Data"}, {
             { "Athlete", StravaData.GetObject(athlete_uri,"Athlete")},
-            { "Activities", StravaData.GetObject(activity_uri,"Activities") }
+            { "Activities", StravaData.GetObject(activity_uri,"Activities") },
+            { "Club", StravaData.GetObject(club_uri, "Club") },
+            { "ClubActivities", StravaData.GetObject(club_activity_uri,"ClubActivities") }
         }),
 
         // add other columns
@@ -124,8 +128,31 @@ in
     #"Removed Blank Rows";
 
 
+//Parse the club activities by json
+ StravaData.ClubActivities = (json) =>
+    let
+        ConvertToTable = Table.FromList(json, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+        #"Expanded Column1" = Table.ExpandRecordColumn( ConvertToTable, "Column1", {"id", "resource_state", "external_id", "upload_id", "athlete", "name", "distance", "moving_time", "elapsed_time", "total_elevation_gain", "type", "start_date", "start_date_local", "timezone", "utc_offset", "start_latlng", "end_latlng", "location_city", "location_state", "location_country", "start_latitude", "start_longitude", "achievement_count", "kudos_count", "comment_count", "athlete_count", "photo_count", "map", "trainer", "commute", "manual", "private", "flagged", "gear_id", "average_speed", "max_speed", "average_cadence", "average_temp", "average_watts", "kilojoules", "device_watts", "has_heartrate", "average_heartrate", "max_heartrate", "elev_high", "elev_low", "pr_count", "total_photo_count", "has_kudoed", "workout_type", "weighted_average_watts", "max_watts"}, {"id", "resource_state", "external_id", "upload_id", "athlete", "name", "distance", "moving_time", "elapsed_time", "total_elevation_gain", "type", "start_date", "start_date_local", "timezone", "utc_offset", "start_latlng", "end_latlng", "location_city", "location_state", "location_country", "start_latitude", "start_longitude", "achievement_count", "kudos_count", "comment_count", "athlete_count", "photo_count", "map", "trainer", "commute", "manual", "private", "flagged", "gear_id", "average_speed", "max_speed", "average_cadence", "average_temp", "average_watts", "kilojoules", "device_watts", "has_heartrate", "average_heartrate", "max_heartrate", "elev_high", "elev_low", "pr_count", "total_photo_count", "has_kudoed", "workout_type", "weighted_average_watts", "max_watts"}),
+        #"Expanded athlete" = Table.ExpandRecordColumn(#"Expanded Column1", "athlete", {"firstname", "lastname"}, {"athlete.firstname", "athlete.lastname"}),
+        #"Removed Columns" = Table.RemoveColumns(#"Expanded athlete",{"id", "external_id", "upload_id", "resource_state", "start_date", "start_date_local", "timezone", "utc_offset", "start_latlng", "end_latlng", "location_city", "location_state", "location_country", "start_latitude", "start_longitude", "achievement_count", "kudos_count", "comment_count", "athlete_count", "photo_count", "map", "trainer", "commute", "manual", "private", "flagged", "gear_id", "average_speed", "max_speed", "average_cadence", "average_temp", "average_watts", "kilojoules", "device_watts", "has_heartrate", "average_heartrate", "max_heartrate", "elev_high", "elev_low", "pr_count", "total_photo_count", "has_kudoed", "workout_type", "weighted_average_watts", "max_watts"}),
+        #"Changed Type" = Table.TransformColumnTypes(#"Removed Columns",{{"distance", type number}, {"moving_time", Int64.Type}, {"elapsed_time", Int64.Type}, {"total_elevation_gain", type number}})
+
+in
+    #"Changed Type";
+
+
 //Parse the Athlete by json
 StravaData.Athlete = (json) =>
+    let
+         ConvertToTable = Table.FromList(json, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+        tableresult = Record.ToTable(ConvertToTable),
+        result = Table.Pivot(tableresult, List.Distinct(tableresult[Name]), "Name", "Value")
+in
+   result;
+
+
+//Parse the Club by json
+StravaData.Club = (json) =>
     let
          ConvertToTable = Table.FromList(json, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
         tableresult = Record.ToTable(ConvertToTable),
@@ -166,8 +193,12 @@ StravaData.Page = (url as text, page as number, contentType as text) as nullable
                 else //Determine how to parse the JSON based on the type of content.
                     if(contentType = "Activities") then
                         StravaData.Activities(json) meta [NextPage = page + 1]
-                    else
+                    else if(contentType = "Club") then
+                        StravaData.Club(json) meta [NextPage = page + 1]
+                    else if(contentType = "Athlete") then
                         StravaData.Athlete(json) meta [NextPage = page + 1]
+                    else
+                        StravaData.ClubActivities(json) meta [NextPage = page + 1]
             else
                 Table.FromRecords({json}) meta [NextPage = null] // turn single record into one item list
     in
